@@ -1,0 +1,125 @@
+Отличная официальная документация! В ней учтены важные моменты по безопасности (закрытие `app.ini` на запись) и оптимизации тайм-аутов для больших файлов.
+
+Адаптированный пошаговый чек-лист под ваш LXC-контейнер без лишнего текста:
+
+**1. Подготовка системы и пользователя**
+
+```bash
+# Установка Git и Git LFS
+sudo apt update && sudo apt install -y git git-lfs sqlite3
+
+# Создание системного пользователя git
+sudo adduser --system --shell /bin/bash --gecos 'Git Version Control' \
+  --group --disabled-password --home /home/git git
+
+```
+
+---
+
+**2. Загрузка и исполняемый файл Forgejo**
+
+```bash
+# Скачивание релиза v16.0.2
+wget https://code.forgejo.org/forgejo/forgejo/releases/download/v16.0.2/forgejo-16.0.2-linux-amd64
+
+# Перемещение и выдача прав
+sudo cp forgejo-16.0.2-linux-amd64 /usr/local/bin/forgejo
+sudo chmod 755 /usr/local/bin/forgejo
+
+```
+
+---
+
+**3. Создание каталогов с правильными правами**
+
+```bash
+# Каталог данных
+sudo mkdir -p /var/lib/forgejo
+sudo chown git:git /var/lib/forgejo && sudo chmod 750 /var/lib/forgejo
+
+# Каталог конфигурации (пока даем доступ git для веб-установки)
+sudo mkdir -p /etc/forgejo
+sudo chown git:git /etc/forgejo && sudo chmod 770 /etc/forgejo
+
+```
+
+---
+
+**4. Настройка и запуск службы Systemd**
+
+```bash
+# Загрузка официального юнита
+sudo wget -O /etc/systemd/system/forgejo.service https://codeberg.org/forgejo/forgejo/raw/branch/forgejo/contrib/systemd/forgejo.service
+
+# Применение и запуск
+sudo systemctl daemon-reload
+sudo systemctl enable --now forgejo.service
+
+```
+
+---
+
+**5. Первичная настройка через Web GUI**
+
+1. Перейдите по адресу `http://<IP_LXC_КОНТЕЙНЕРА>:3000/`.
+2. Выберите **SQLite3**.
+3. Укажите **Server Domain** (IP-адрес LXC) и **Base URL** (`http://<IP_LXC_КОНТЕЙНЕРА>:3000/`).
+4. Создайте учетную запись администратора внизу страницы и нажмите **Install Forgejo**.
+
+---
+
+**6. Финализация прав и донастройка `app.ini**`
+После завершения веб-установки остановите сервис для защиты конфига и увеличения тайм-аутов:
+
+```bash
+sudo systemctl stop forgejo.service
+
+# Защищаем конфиг (делаем read-only для пользователя git)
+sudo chown root:git /etc/forgejo
+sudo chmod 750 /etc/forgejo && sudo chmod 640 /etc/forgejo/app.ini
+
+```
+
+Откройте `/etc/forgejo/app.ini` через `sudo nano /etc/forgejo/app.ini` и добавьте настройки для работы с крупными репозиториями:
+
+```ini
+[repository.upload]
+FILE_MAX_SIZE = 4095
+MAX_FILES = 20
+
+[server]
+LFS_HTTP_AUTH_EXPIRY = 180m
+
+[git.timeout]
+DEFAULT = 3600
+MIGRATE = 6000
+MIRROR  = 3000
+CLONE   = 3000
+PULL    = 3000
+GC      = 600
+
+```
+
+Запустите службу обратно:
+
+```bash
+sudo systemctl start forgejo.service
+
+```
+
+---
+
+**7. Удобный CLI-скрипт (Опционально)**
+Чтобы выполнять команды CLI Forgejo от имени пользователя `git` без ввода длинных путей, создайте вспомогательный скрипт `/usr/local/bin/forgejo.sh`:
+
+```bash
+sudo bash -c 'cat << "EOF" > /usr/local/bin/forgejo.sh
+#!/bin/sh
+sudo -u git forgejo -w /var/lib/forgejo -c /etc/forgejo/app.ini "$@"
+EOF'
+
+sudo chmod 755 /usr/local/bin/forgejo.sh
+
+```
+
+Теперь администрировать пользователей или репозитории из консоли можно простой командой: `forgejo.sh admin user list`.
