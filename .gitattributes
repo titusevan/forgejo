@@ -1,0 +1,1 @@
+forgejo-16.0.2-linux-amd64 filter=lfs diff=lfs merge=lfs -text
