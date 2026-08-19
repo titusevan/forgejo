@@ -1,0 +1,15 @@
+# 1. Инициализируем Git LFS в репозитории (если еще не делали этого)
+git lfs install
+
+# 2. Указываем Git LFS отслеживать этот конкретный бинарник
+git lfs track "forgejo-16.0.2-linux-amd64"
+
+# 3. Обязательно добавляем служебный файл .gitattributes (в нем записано правило для LFS)
+git add .gitattributes
+
+# 4. Добавляем сам файл и коммитим
+git add forgejo-16.0.2-linux-amd64
+git commit -m "Add Forgejo binary via LFS"
+
+# 5. Отправляем изменения на GitHub
+git push origin main
